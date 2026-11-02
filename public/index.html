@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smart Wallet Copier – Paper Trading Dashboard</title>
+<meta name="robots" content="noindex">
+<style>
+:root{--bg:#0b0f17;--card:#121826;--card2:#171f31;--line:#232d44;--tx:#e6ebf5;--mut:#8a96b0;--g:#2ee59d;--r:#ff5d73;--b:#5b9dff;--y:#ffc857}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.45 -apple-system,Segoe UI,Roboto,Inter,sans-serif}
+a{color:var(--b);text-decoration:none}a:hover{text-decoration:underline}
+.banner{background:repeating-linear-gradient(45deg,#3a2a05,#3a2a05 12px,#2e2204 12px,#2e2204 24px);color:var(--y);text-align:center;font-weight:700;letter-spacing:.06em;padding:9px 12px;font-size:13px;border-bottom:1px solid #5a4410}
+header{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;padding:16px 20px 4px;max-width:1280px;margin:auto}
+h1{font-size:20px;margin:0}
+.meta{color:var(--mut);font-size:12.5px;text-align:right}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--g);margin-right:6px}
+.dot.stale{background:var(--r)}
+main{max-width:1280px;margin:auto;padding:8px 20px 40px}
+.grid{display:grid;gap:12px}.grid>*,.card{min-width:0}
+.kpis{grid-template-columns:repeat(auto-fit,minmax(170px,1fr));margin:10px 0 14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.kpi .l{color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+.kpi .v{font-size:26px;font-weight:700;margin-top:4px}
+.kpi .s{color:var(--mut);font-size:12px;margin-top:2px}
+.pos{color:var(--g)}.neg{color:var(--r)}.mut{color:var(--mut)}
+h2{font-size:15px;margin:0 0 10px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.cols{grid-template-columns:2fr 1fr}
+@media(max-width:900px){.cols{grid-template-columns:1fr}.meta{text-align:left}}@media(max-width:600px){.kpis{grid-template-columns:1fr 1fr}.kpi .v{font-size:21px}main,header{padding-left:12px;padding-right:12px}}
+.sec{margin-top:14px}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px;white-space:nowrap}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left}
+th{color:var(--mut);font-weight:600;font-size:12px;cursor:pointer;user-select:none;position:sticky;top:0;background:var(--card)}
+th.sorted::after{content:attr(data-dir);color:var(--b);margin-left:4px}
+td.n,th.n{text-align:right}
+tr:hover td{background:var(--card2)}
+.ctl{display:flex;gap:8px;flex-wrap:wrap}
+input,select{background:var(--card2);color:var(--tx);border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-size:13px}
+.pill{display:inline-block;padding:1px 8px;border-radius:99px;font-size:11.5px;background:var(--card2);border:1px solid var(--line);color:var(--mut)}
+.pill.w{color:var(--g);border-color:#1d6b4c}.pill.l{color:var(--r);border-color:#6b2433}.pill.p{color:var(--y);border-color:#6b5420}
+svg text{fill:var(--mut);font-size:11px}
+.bar{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:12.5px}
+.bar .t{flex:0 0 46%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar .f{height:10px;border-radius:5px;background:var(--b)}
+.bar .c{color:var(--mut)}
+#tip{position:fixed;pointer-events:none;background:#000c;border:1px solid var(--line);border-radius:6px;padding:4px 8px;font-size:12px;display:none;z-index:9}
+.empty{color:var(--mut);padding:18px;text-align:center}
+.note{color:var(--mut);font-size:12px;margin-top:8px}
+footer{max-width:1280px;margin:auto;padding:0 20px 30px;color:var(--mut);font-size:12px}
+.tabs{display:flex;gap:6px}
+.tabs button{background:var(--card2);color:var(--mut);border:1px solid var(--line);border-radius:8px;padding:4px 10px;cursor:pointer;font-size:12px}
+.tabs button.on{color:var(--tx);border-color:var(--b)}
+</style>
+</head>
+<body>
+<div class="banner">PAPER TRADING ONLY – NOT FINANCIAL ADVICE · simulated trades, no real money</div>
+<header>
+  <div><h1>Smart Wallet Copier</h1><div class="mut" style="font-size:12.5px">Paper copy-trading of Solana pump.fun smart wallets</div></div>
+  <div class="meta"><div><span class="dot" id="dot"></span><span id="upd">loading…</span></div><div id="chk"></div><div>auto-refresh 60s · <a href="#" id="rf">refresh now</a></div></div>
+</header>
+<main id="app"><div class="empty">Loading…</div></main>
+<footer>Read-only view. Entries/exits simulate 10% slippage + 1% fee; open positions are marked at the last price the bot saw (before exit costs). Data is pushed from the bot; if it looks stale, the bot or the free Render instance may be asleep. Memecoins are extremely risky; nothing here is advice.</footer>
+<div id="tip"></div>
+<script>
+'use strict';
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const money=(x,d=2)=>x==null?'–':(x<0?'-':'')+'$'+Math.abs(x).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+const sgn=(x,d=2)=>x==null?'–':(x>0?'+':x<0?'-':'')+'$'+Math.abs(x).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+const cls=x=>x>0?'pos':x<0?'neg':'mut';
+const pct=x=>x==null?'–':(x*100).toFixed(0)+'%';
+const mc=x=>x==null?'–':x>=1e6?'$'+(x/1e6).toFixed(2)+'M':x>=1e3?'$'+(x/1e3).toFixed(1)+'k':'$'+Math.round(x);
+const FMT=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kolkata',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',hour12:false});
+const ist=t=>{if(!t)return'–';const d=new Date(t);return isNaN(d)?'–':FMT.format(d)+' IST'};
+const dex=m=>m&&/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(m)?'https://dexscreener.com/solana/'+m:null;
+const kol=a=>/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a||'')?'https://kolscan.io/account/'+a+'?timeframe=30':null;
+const link=(u,t)=>u?`<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(t)}</a>`:esc(t);
+let S=null, sortState={closed:{k:'exit_time',d:-1},wallets:{k:'copied_pnl',d:-1},open:{k:'multiple',d:-1}}, filt={q:'',wallet:'',res:''}, eqMode='both';
+
+function sortRows(rows,st){const{k,d}=st;return rows.slice().sort((a,b)=>{let x=a[k],y=b[k];if(x==null)x=-Infinity;if(y==null)y=-Infinity;return (typeof x==='string'?x.localeCompare(y):x-y)*d})}
+function th(tbl,key,label,num){const st=sortState[tbl];const on=st.k===key;return `<th class="${num?'n ':''}${on?'sorted':''}" data-t="${tbl}" data-k="${key}" data-dir="${on?(st.d>0?'▲':'▼'):''}">${label}</th>`}
+
+function lineChart(series,opts){ // series:[{pts:[{t,v}],color,step}]
+  const W=720,H=250,m={l:52,r:12,t:10,b:24};
+  const all=series.flatMap(s=>s.pts.map(p=>({t:+new Date(p.t),v:p.v}))).filter(p=>!isNaN(p.t));
+  if(all.length<2)return '<div class="empty">Not enough data yet</div>';
+  let t0=Math.min(...all.map(p=>p.t)),t1=Math.max(...all.map(p=>p.t));if(t1===t0)t1=t0+1;
+  let v0=Math.min(...all.map(p=>p.v),opts.base),v1=Math.max(...all.map(p=>p.v),opts.base);const pad=(v1-v0)*.1||1;v0-=pad;v1+=pad;
+  const X=t=>m.l+(t-t0)/(t1-t0)*(W-m.l-m.r),Y=v=>m.t+(1-(v-v0)/(v1-v0))*(H-m.t-m.b);
+  let g='';for(let i=0;i<=4;i++){const v=v0+(v1-v0)*i/4,y=Y(v);g+=`<line x1="${m.l}" x2="${W-m.r}" y1="${y}" y2="${y}" stroke="#232d44"/><text x="${m.l-6}" y="${y+4}" text-anchor="end">$${v.toFixed(0)}</text>`}
+  for(let i=0;i<=4;i++){const t=t0+(t1-t0)*i/4;g+=`<text x="${X(t)}" y="${H-6}" text-anchor="${i===0?'start':i===4?'end':'middle'}">${new Date(t).toLocaleString('en-GB',{timeZone:'Asia/Kolkata',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',hour12:false})}</text>`}
+  g+=`<line x1="${m.l}" x2="${W-m.r}" y1="${Y(opts.base)}" y2="${Y(opts.base)}" stroke="#ffc857" stroke-dasharray="4 4" opacity=".7"/><text x="${W-m.r}" y="${Y(opts.base)-4}" text-anchor="end" style="fill:#ffc857">start $${opts.base}</text>`;
+  const dots=[];
+  for(const s of series){const pts=s.pts.map(p=>({t:+new Date(p.t),v:p.v})).filter(p=>!isNaN(p.t));let d='';
+    pts.forEach((p,i)=>{const x=X(p.t),y=Y(p.v);if(i===0)d+=`M${x},${y}`;else d+=s.step?`H${x}V${y}`:`L${x},${y}`;dots.push({x,y,t:p.t,v:p.v,n:s.name,c:s.color})});
+    g+=`<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round"/>`;
+    const last=pts[pts.length-1];g+=`<circle cx="${X(last.t)}" cy="${Y(last.v)}" r="3.5" fill="${s.color}"/>`}
+  window._dots=dots;
+  return `<svg id="eq" viewBox="0 0 ${W} ${H}" width="100%" style="max-height:290px">${g}</svg>`
+}
+function barChart(rows){ // [{date,pnl}]
+  if(!rows.length)return '<div class="empty">No closed trades yet</div>';
+  const W=420,H=200,m={l:44,r:8,t:10,b:24},mx=Math.max(1,...rows.map(r=>Math.abs(r.pnl)))*1.15,bw=Math.min(60,(W-m.l-m.r)/rows.length*.7),Y=v=>m.t+(1-(v+mx)/(2*mx))*(H-m.t-m.b);
+  let g=`<line x1="${m.l}" x2="${W-m.r}" y1="${Y(0)}" y2="${Y(0)}" stroke="#3a4766"/><text x="${m.l-6}" y="${Y(mx)+8}" text-anchor="end">$${mx.toFixed(0)}</text><text x="${m.l-6}" y="${Y(-mx)}" text-anchor="end">-$${mx.toFixed(0)}</text>`;
+  rows.forEach((r,i)=>{const cx=m.l+(i+.5)*(W-m.l-m.r)/rows.length,y=Y(Math.max(r.pnl,0)),h=Math.abs(Y(r.pnl)-Y(0));g+=`<rect x="${cx-bw/2}" y="${y}" width="${bw}" height="${Math.max(h,1)}" rx="3" fill="${r.pnl>=0?'#2ee59d':'#ff5d73'}"><title>${esc(r.date)}: ${sgn(r.pnl)} (${r.trades} trades)</title></rect><text x="${cx}" y="${H-6}" text-anchor="middle">${esc(r.date.slice(5))}</text><text x="${cx}" y="${r.pnl>=0?y-3:y+h+11}" text-anchor="middle" style="fill:${r.pnl>=0?'#2ee59d':'#ff5d73'}">${sgn(r.pnl,1)}</text>`});
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%">${g}</svg>`
+}
+
+function render(){
+  const s=S;if(!s||s.empty){$('#app').innerHTML='<div class="empty card">No data pushed yet. The bot will push a snapshot shortly.</div>';$('#upd').textContent='waiting for first snapshot';return}
+  const ago=(Date.now()-new Date(s.generated_at))/60000;$('#dot').className='dot'+(ago>20?' stale':'');
+  $('#upd').textContent='Updated '+ist(s.generated_at)+' ('+(ago<1?'<1':Math.round(ago))+' min ago)'+(ago>20?' – STALE':'');
+  $('#chk').textContent='Bot last checked wallets: '+(s.last_check_ist||'–');
+  const ret=s.mtm_equity-s.start_bankroll;
+  const kp=[
+   ['Bankroll (mark-to-market)',money(s.mtm_equity),`<span class="${cls(ret)}">${sgn(ret)} (${(ret/s.start_bankroll*100).toFixed(1)}%)</span> vs ${money(s.start_bankroll,0)} start`,cls(ret)],
+   ['Realized PnL',sgn(s.realized_pnl),`realized equity ${money(s.realized_equity)}`,cls(s.realized_pnl)],
+   ['Unrealized (open)',sgn(s.unrealized_pnl),`open value ${money(s.open_value)}`,cls(s.unrealized_pnl)],
+   ['Win rate',pct(s.win_rate),`${s.wins}W / ${s.losses}L of ${s.n_closed} closed rows`,''],
+   ['Open positions',s.n_open+' / '+s.max_open,`cash ${money(s.cash)}`,''],
+   ['Today (IST) realized',s.daily_loss?sgn(s.daily_loss.realized_pnl_usd):'–',s.daily_loss?`daily loss limit ${money(s.daily_loss.max_daily_loss_usd,0)}`:'',s.daily_loss?cls(s.daily_loss.realized_pnl_usd):'']];
+  let h='<div class="grid kpis">'+kp.map(k=>`<div class="card kpi"><div class="l">${k[0]}</div><div class="v ${k[3]}">${k[1]}</div><div class="s">${k[2]}</div></div>`).join('')+'</div>';
+
+  const series=[];
+  if(eqMode!=='mtm')series.push({name:'Realized',pts:s.equity_realized,color:'#5b9dff',step:true});
+  if(eqMode!=='realized'&&s.equity_mtm.length)series.push({name:'Mark-to-market',pts:s.equity_mtm,color:'#2ee59d'});
+  h+=`<div class="grid cols"><div class="card"><h2>Equity curve <span class="tabs">${['both','realized','mtm'].map(m=>`<button class="${eqMode===m?'on':''}" data-eq="${m}">${m==='both'?'Both':m==='realized'?'Realized':'Mark-to-market'}</button>`).join('')}</span></h2>${lineChart(series,{base:s.start_bankroll})}<div class="note"><span style="color:#5b9dff">■</span> realized (steps at each exit) &nbsp; <span style="color:#2ee59d">■</span> mark-to-market (recorded each bot push; history starts at first push)</div></div>
+  <div class="card"><h2>Daily realized PnL (IST)</h2>${barChart(s.daily_pnl)}</div></div>`;
+
+  // open
+  let op=sortRows(s.open_positions,sortState.open);
+  h+=`<div class="card sec"><h2>Open positions <span class="mut" style="font-weight:400">${s.n_open} of ${s.max_open} slots</span></h2><div class="tw">${op.length?`<table><tr>${th('open','name','Token')}${th('open','wallet_name','Copied wallet')}${th('open','entry_time','Entered')}${th('open','entry_mc','Entry MC',1)}${th('open','last_mc','Now MC',1)}${th('open','multiple','Multiple',1)}${th('open','value_usd','Value',1)}${th('open','unrealized_usd','Unrealized',1)}${th('open','realized_partial_usd','Banked',1)}<th>Status</th></tr>`+op.map(p=>`<tr><td>${link(dex(p.mint),p.name||p.mint)}</td><td>${esc(p.wallet_name)}</td><td>${ist(p.entry_time)}</td><td class="n">${mc(p.entry_mc)}</td><td class="n">${mc(p.last_mc)}</td><td class="n ${p.multiple>=1?'pos':'neg'}">${p.multiple!=null?p.multiple.toFixed(2)+'x':'–'}</td><td class="n">${money(p.value_usd)}</td><td class="n ${cls(p.unrealized_usd)}">${sgn(p.unrealized_usd)}</td><td class="n ${cls(p.realized_partial_usd)}">${sgn(p.realized_partial_usd)}</td><td>${p.tp1_done?'<span class="pill w">TP1 done</span> ':''}${p.tp2_done?'<span class="pill w">TP2 done</span> ':''}<span class="pill">stop -40%</span></td></tr>`).join('')+'</table>':'<div class="empty">No open positions</div>'}</div><div class="note">Price as of ${op[0]?ist(op[0].last_check_time):'–'} (${esc(op[0]?op[0].price_source:'')}). “Banked” = realized profit from partial take-profits on that position.</div></div>`;
+
+  // closed
+  const wl=[...new Set(s.closed_trades.map(t=>t.wallet_name))];
+  let cl=s.closed_trades.filter(t=>(!filt.q||(t.name+t.mint+t.reason).toLowerCase().includes(filt.q.toLowerCase()))&&(!filt.wallet||t.wallet_name===filt.wallet)&&(!filt.res||(filt.res==='win'?t.pnl_usd>0:t.pnl_usd<=0)));
+  cl=sortRows(cl,sortState.closed);const tot=cl.reduce((a,t)=>a+t.pnl_usd,0);
+  h+=`<div class="card sec"><h2>Closed trades <span class="ctl"><input id="fq" placeholder="search token / reason" value="${esc(filt.q)}"><select id="fw"><option value="">All wallets</option>${wl.map(w=>`<option ${filt.wallet===w?'selected':''}>${esc(w)}</option>`).join('')}</select><select id="fr"><option value="">Win + loss</option><option value="win" ${filt.res==='win'?'selected':''}>Wins</option><option value="loss" ${filt.res==='loss'?'selected':''}>Losses</option></select></span></h2><div class="tw"><table><tr>${th('closed','name','Token')}${th('closed','wallet_name','Wallet')}${th('closed','entry_time','Entered')}${th('closed','exit_time','Exited')}${th('closed','entry_mc','Entry MC',1)}${th('closed','exit_mc','Exit MC',1)}${th('closed','size_usd','Size',1)}${th('closed','pnl_usd','PnL',1)}${th('closed','pnl_pct','%',1)}<th>Exit reason</th></tr>`+(cl.length?cl.map(t=>`<tr><td>${link(dex(t.mint),t.name)}${t.partial?' <span class="pill p">partial TP</span>':''}</td><td>${esc(t.wallet_name)}</td><td>${ist(t.entry_time)}</td><td>${ist(t.exit_time)}</td><td class="n">${mc(t.entry_mc)}</td><td class="n">${mc(t.exit_mc)}</td><td class="n">${money(t.size_usd)}</td><td class="n ${cls(t.pnl_usd)}">${sgn(t.pnl_usd)}</td><td class="n ${cls(t.pnl_pct)}">${t.pnl_pct!=null?(t.pnl_pct>0?'+':'')+t.pnl_pct.toFixed(1)+'%':'–'}</td><td title="${esc(t.reason)}">${esc(t.reason.length>60?t.reason.slice(0,58)+'…':t.reason)}</td></tr>`).join(''):'<tr><td colspan="10" class="empty">No matching trades</td></tr>')+`</table></div><div class="note">${cl.length} rows · total ${sgn(tot)}. Partial take-profits are listed as their own rows (size = cost of the slice sold).</div></div>`;
+
+  // wallets + skips
+  let ws=sortRows(s.wallets.filter(w=>w.copied_trades||w.open_positions||w.buy_signals),sortState.wallets);
+  h+=`<div class="grid cols sec"><div class="card"><h2>Wallet leaderboard <span class="mut" style="font-weight:400">copied paper trades only</span></h2><div class="tw"><table><tr>${th('wallets','name','Wallet')}${th('wallets','copied_pnl','Realized PnL',1)}${th('wallets','copied_trades','Trades',1)}${th('wallets','copied_win_rate','Win rate',1)}${th('wallets','open_unrealized','Open unreal.',1)}${th('wallets','buy_signals','Buys seen',1)}</tr>`+ws.map(w=>`<tr><td>${link(kol(w.address),w.name)}</td><td class="n ${cls(w.copied_pnl)}">${sgn(w.copied_pnl)}</td><td class="n">${w.copied_trades}</td><td class="n">${pct(w.copied_win_rate)}</td><td class="n ${cls(w.open_unrealized)}">${w.open_positions?sgn(w.open_unrealized):'–'}</td><td class="n">${w.buy_signals}</td></tr>`).join('')+`</table></div><div class="note">Small samples – treat as noise until each wallet has many trades. “Buys seen” = real (non-dust) buys logged from signals.</div></div>
+  <div class="card"><h2>Why signals were skipped</h2>`+(s.skip_reasons.length?(()=>{const mx=Math.max(...s.skip_reasons.map(r=>r.count));return s.skip_reasons.map(r=>`<div class="bar"><div class="t" title="${esc(r.reason)}">${esc(r.reason)}</div><div class="f" style="width:${Math.max(4,r.count/mx*38)}%"></div><div class="c">${r.count}</div></div>`).join('')})():'<div class="empty">No skips logged</div>')+`<div class="note">${s.skip_total} logged skip/ignore events (${s.skip_real_total} real signals, rest dust). Real buys that weren't copied are listed below.</div></div></div>`;
+
+  h+=`<div class="card sec"><h2>Recent skipped signals</h2><div class="tw"><table><tr><th>Time</th><th>Wallet</th><th>Reason</th><th>Detail</th></tr>`+s.recent_skips.slice(0,25).map(k=>`<tr><td>${ist(k.time)}</td><td>${esc(k.wallet_name||'–')}</td><td><span class="pill">${esc(k.category)}</span></td><td style="white-space:normal;min-width:260px;max-width:620px">${k.mint?link(dex(k.mint),k.mint.slice(0,6)+'…')+' ':''}${esc(k.text.length>230?k.text.slice(0,228)+'…':k.text)}</td></tr>`).join('')+`</table></div></div>`;
+
+  // watchlist
+  h+=`<div class="card sec"><h2>Watchlist <span class="mut" style="font-weight:400">${s.wallets.length} wallets · 30d stats from kolscan at selection time</span></h2><div class="tw"><table><tr><th>Wallet</th><th class="n">30d PnL</th><th class="n">Win rate</th><th class="n">Tokens</th><th class="n">Avg hold</th><th class="n">Copied</th><th>Note</th></tr>`+s.wallets.map(w=>`<tr><td>${link(kol(w.address),w.name)}</td><td class="n">${w.pnl_30d_sol!=null?Math.round(w.pnl_30d_sol)+' SOL':'–'}${w.pnl_30d_usd?` <span class="mut">(≈${mc(w.pnl_30d_usd)})</span>`:''}</td><td class="n">${pct(w.win_rate_30d)}</td><td class="n">${w.tokens_30d??'–'}</td><td class="n">${esc(w.avg_hold||'–')}</td><td class="n">${w.copied_trades}</td><td style="white-space:normal;min-width:200px;max-width:420px" class="mut">${esc((w.note||'').slice(0,160))}</td></tr>`).join('')+`</table></div><div class="note">${s.excluded_candidates} other kolscan candidates were screened out (low win rate, snipers/bots, dead launches…). Realized SOL converted at $${s.sol_usd} (approximation).</div></div>`;
+  const y=window.scrollY;$('#app').innerHTML=h;window.scrollTo(0,y);bind();
+}
+function bind(){
+  document.querySelectorAll('th[data-k]').forEach(e=>e.onclick=()=>{const st=sortState[e.dataset.t];if(st.k===e.dataset.k)st.d*=-1;else{st.k=e.dataset.k;st.d=-1}render()});
+  document.querySelectorAll('[data-eq]').forEach(e=>e.onclick=()=>{eqMode=e.dataset.eq;render()});
+  const q=$('#fq');if(q){q.oninput=()=>{filt.q=q.value;const p=q.selectionStart;render();const n=$('#fq');n.focus();n.setSelectionRange(p,p)};$('#fw').onchange=e=>{filt.wallet=e.target.value;render()};$('#fr').onchange=e=>{filt.res=e.target.value;render()}}
+  const svg=$('#eq'),tip=$('#tip');
+  if(svg){svg.onmousemove=e=>{const r=svg.getBoundingClientRect(),x=(e.clientX-r.left)/r.width*720;let b=null,bd=1e9;for(const d of window._dots||[]){const dd=Math.abs(d.x-x);if(dd<bd){bd=dd;b=d}}if(b&&bd<40){tip.style.display='block';tip.style.left=(e.clientX+12)+'px';tip.style.top=(e.clientY-30)+'px';tip.textContent=b.n+': '+money(b.v)+' · '+ist(b.t)}else tip.style.display='none'};svg.onmouseleave=()=>tip.style.display='none'}
+}
+async function load(){try{const r=await fetch('/api/snapshot',{cache:'no-store'});S=await r.json();render()}catch(e){$('#upd').textContent='fetch failed – retrying'}}
+$('#rf').onclick=e=>{e.preventDefault();load()};
+load();setInterval(load,60000);
+</script>
+</body>
+</html>
